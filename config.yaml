@@ -1,0 +1,13 @@
+camera:
+  source: 0          # 0 = default webcam; or a path to a video file
+  width: 640
+  height: 480
+
+detection:
+  model: "yolo11n.pt"      # nano = fastest. Use yolov8n.pt if 11 gives trouble
+  confidence: 0.4
+  device: "cpu"            # change to "cuda" if torch.cuda.is_available()
+
+display:
+  show_window: true
+  show_fps: true

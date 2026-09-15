@@ -1,0 +1,31 @@
+# Virtual environment
+ai-vision/
+venv/
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Model weights (downloaded, not authored)
+*.pt
+*.onnx
+models/*
+!models/.gitkeep
+
+# Data
+datasets/
+*.mp4
+*.jpg
+*.png
+!assets/*.png
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Env secrets
+.env
