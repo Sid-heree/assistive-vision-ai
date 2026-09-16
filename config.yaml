@@ -8,6 +8,14 @@ detection:
   confidence: 0.4
   device: "cpu"            # change to "cuda" if torch.cuda.is_available()
 
+spatial:
+  left_boundary: 0.33
+  right_boundary: 0.66
+  top_boundary: 0.33
+  bottom_boundary: 0.66
+
 display:
   show_window: true
   show_fps: true
+  show_zones: true
+  summary_every: 15        # print a sentence every N frames, not every frame
