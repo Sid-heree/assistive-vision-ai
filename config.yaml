@@ -19,3 +19,8 @@ display:
   show_fps: true
   show_zones: true
   summary_every: 15        # print a sentence every N frames, not every frame
+depth:
+  model: "depth-anything/Depth-Anything-V2-Small-hf"
+  device: "cpu"
+  run_every_n_frames: 3      # depth is expensive; don't run every frame
+  downscale_width: 256       # smaller = faster, coarser

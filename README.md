@@ -27,3 +27,8 @@ python -m app.main
 \`\`\`
 Camera → Frame → YOLO → Detections → Visualisation
 \`\`\`
+## Known issues
+- Zone labels flicker for objects sitting on a boundary (fix: temporal
+  smoothing, planned Day 6 with tracking)
+- Position is angular, not metric — "left" means a direction, not a
+  displacement, until depth lands on Day 3
