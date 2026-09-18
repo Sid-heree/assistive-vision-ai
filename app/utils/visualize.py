@@ -45,3 +45,11 @@ def draw_fps(frame, fps):
     cv2.putText(frame, f"FPS: {fps:.1f}", (10, 25),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 200, 255), 2)
     return frame
+def draw_text_detections(frame, text_detections):
+    for t in text_detections:
+        x1, y1, x2, y2 = t.bbox
+        cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 255), 2)  # magenta
+        label = f'"{t.text}" {t.confidence:.2f}'
+        cv2.putText(frame, label, (x1, max(y1 - 6, 12)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 1)
+    return frame

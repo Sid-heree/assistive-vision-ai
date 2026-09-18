@@ -10,7 +10,11 @@ from app.scene.spatial import SpatialReasoner
 from app.scene.describe import summarize
 from app.depth.depth_estimator import DepthEstimator
 from app.depth.sampler import annotate_depth
-from app.utils.visualize import draw_detections, draw_fps, draw_zones
+from app.ocr.ocr_reader import OCRReader
+from app.voice.speaker import Speaker
+from app.utils.visualize import (
+    draw_detections, draw_fps, draw_zones, draw_text_detections
+)
 
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.yaml"
 
@@ -32,6 +36,8 @@ def main():
     cfg = load_config()
     sp_cfg = cfg["spatial"]
     d_cfg = cfg["depth"]
+    ocr_cfg = cfg["ocr"]
+    v_cfg = cfg["voice"]
 
     detector = Detector(
         model_path=cfg["detection"]["model"],
@@ -45,67 +51,83 @@ def main():
         bottom_boundary=sp_cfg["bottom_boundary"],
     )
     depth_estimator = DepthEstimator(
-        model_name=d_cfg["model"],
-        device=d_cfg["device"],
+        model_name=d_cfg["model"], device=d_cfg["device"],
     )
+    ocr_reader = OCRReader(
+        languages=ocr_cfg["languages"],
+        confidence=ocr_cfg["confidence"],
+        min_text_length=ocr_cfg["min_text_length"],
+        gpu=ocr_cfg["gpu"],
+    )
+    speaker = Speaker(
+        rate=v_cfg["rate"], volume=v_cfg["volume"],
+        min_repeat_interval=v_cfg["min_repeat_interval"],
+    ) if v_cfg["enabled"] else None
 
     prev_time = time.time()
     frame_idx = 0
     last_depth_map = None
+    last_texts = []
     depth_ms = 0.0
+    ocr_ms = 0.0
 
-    with Camera(source=cfg["camera"]["source"],
-                width=cfg["camera"]["width"],
-                height=cfg["camera"]["height"]) as cam:
+    try:
+        with Camera(source=cfg["camera"]["source"],
+                    width=cfg["camera"]["width"],
+                    height=cfg["camera"]["height"]) as cam:
 
-        for frame in cam.frames():
-            frame_idx += 1
+            for frame in cam.frames():
+                frame_idx += 1
 
-            t0 = time.perf_counter()
-            detections = detector.detect(frame)
-            detect_ms = (time.perf_counter() - t0) * 1000
+                t0 = time.perf_counter()
+                detections = detector.detect(frame)
+                detect_ms = (time.perf_counter() - t0) * 1000
 
-            detections = spatial.annotate(detections)
+                detections = spatial.annotate(detections)
 
-            # Depth is expensive -> only recompute every N frames,
-            # reuse the last map otherwise. Distance updates a bit
-            # "laggy" but that's an acceptable tradeoff for now.
-            if frame_idx % d_cfg["run_every_n_frames"] == 0 or last_depth_map is None:
-                small = downscale(frame, d_cfg["downscale_width"])
-                t2 = time.perf_counter()
-                depth_small = depth_estimator.estimate(small)
-                depth_ms = (time.perf_counter() - t2) * 1000
-                # resize the small depth map back up to full frame size
-                last_depth_map = DepthEstimator._resize(
-                    depth_small, frame.shape[1], frame.shape[0]
-                )
+                if frame_idx % d_cfg["run_every_n_frames"] == 0 or last_depth_map is None:
+                    small = downscale(frame, d_cfg["downscale_width"])
+                    t2 = time.perf_counter()
+                    depth_small = depth_estimator.estimate(small)
+                    depth_ms = (time.perf_counter() - t2) * 1000
+                    last_depth_map = DepthEstimator._resize(
+                        depth_small, frame.shape[1], frame.shape[0]
+                    )
+                detections = annotate_depth(detections, last_depth_map)
 
-            detections = annotate_depth(detections, last_depth_map)
+                if frame_idx % ocr_cfg["run_every_n_frames"] == 0:
+                    t3 = time.perf_counter()
+                    last_texts = ocr_reader.read(frame)
+                    ocr_ms = (time.perf_counter() - t3) * 1000
+                    last_texts = spatial.annotate(last_texts)
 
-            if cfg["display"].get("show_zones", True):
-                frame = draw_zones(frame, sp_cfg["left_boundary"],
-                                   sp_cfg["right_boundary"])
-            frame = draw_detections(frame, detections)
+                frame = draw_zones(frame, sp_cfg["left_boundary"], sp_cfg["right_boundary"])
+                frame = draw_detections(frame, detections)
+                frame = draw_text_detections(frame, last_texts)
 
-            now = time.time()
-            fps = 1.0 / max(now - prev_time, 1e-6)
-            prev_time = now
-            if cfg["display"]["show_fps"]:
-                frame = draw_fps(frame, fps)
+                now = time.time()
+                fps = 1.0 / max(now - prev_time, 1e-6)
+                prev_time = now
+                if cfg["display"]["show_fps"]:
+                    frame = draw_fps(frame, fps)
 
-            if frame_idx % cfg["display"].get("summary_every", 15) == 0:
-                print(f"[yolo {detect_ms:5.1f}ms | depth {depth_ms:6.1f}ms] "
-                      f"{summarize(detections)}")
-                for det in detections:
-                    print(f"    {det.class_name:10s} {det.position:6s} "
-                          f"{det.depth_label:10s} (nearness={det.distance})")
+                if frame_idx % cfg["display"].get("summary_every", 15) == 0:
+                    sentence = summarize(detections, last_texts)
+                    print(f"[yolo {detect_ms:5.1f}ms | depth {depth_ms:6.1f}ms | "
+                          f"ocr {ocr_ms:6.1f}ms] {sentence}")
 
-            if cfg["display"]["show_window"]:
-                cv2.imshow("Assistive Vision AI - Day 3", frame)
-                if cv2.waitKey(1) & 0xFF == ord("q"):
-                    break
+                    if speaker:
+                        speaker.say(sentence)
 
-    cv2.destroyAllWindows()
+                if cfg["display"]["show_window"]:
+                    cv2.imshow("Assistive Vision AI - Day 4", frame)
+                    if cv2.waitKey(1) & 0xFF == ord("q"):
+                        break
+
+    finally:
+        if speaker:
+            speaker.stop()
+        cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":

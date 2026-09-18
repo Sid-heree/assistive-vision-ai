@@ -24,3 +24,15 @@ depth:
   device: "cpu"
   run_every_n_frames: 3      # depth is expensive; don't run every frame
   downscale_width: 256       # smaller = faster, coarser
+ocr:
+  languages: ["en"]
+  confidence: 0.5
+  min_text_length: 2
+  run_every_n_frames: 10
+  gpu: false
+
+voice:
+  enabled: true
+  rate: 170
+  volume: 1.0
+  min_repeat_interval: 4.0
