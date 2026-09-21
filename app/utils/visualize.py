@@ -1,14 +1,18 @@
 import cv2
 
 ZONE_COLORS = {
-    "left":   (255, 180, 0),    # BGR: orange-blue
-    "center": (0, 255, 0),      # green
-    "right":  (0, 180, 255),    # amber
+    "left":   (255, 180, 0),
+    "center": (0, 255, 0),
+    "right":  (0, 180, 255),
+}
+
+RISK_COLORS = {
+    "high": (0, 0, 255),       # red, BGR
+    "medium": (0, 165, 255),   # orange
 }
 
 
 def draw_zones(frame, left=0.33, right=0.66):
-    """Faint vertical guides so you can SEE the decision boundaries."""
     h, w = frame.shape[:2]
     for b in (left, right):
         x = int(b * w)
@@ -25,12 +29,15 @@ def draw_zones(frame, left=0.33, right=0.66):
 def draw_detections(frame, detections):
     for det in detections:
         x1, y1, x2, y2 = det.bbox
-        color = ZONE_COLORS.get(det.position, (0, 255, 0))
-        label = f"{det.class_name} {det.confidence:.2f} | {det.position}"
 
-        cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+        color = RISK_COLORS.get(det.risk) or ZONE_COLORS.get(det.position, (0, 255, 0))
+        thickness = 3 if det.risk == "high" else 2
 
-        # mark the ground point we'll sample depth at tomorrow
+        depth_str = f" | {det.depth_label}" if det.depth_label else ""
+        risk_str = f" | {det.risk.upper()}" if det.risk else ""
+        label = f"{det.class_name} {det.confidence:.2f} | {det.position}{depth_str}{risk_str}"
+
+        cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness)
         gx, gy = det.ground_point
         cv2.circle(frame, (int(gx), int(gy)), 4, color, -1)
 
@@ -41,15 +48,18 @@ def draw_detections(frame, detections):
     return frame
 
 
-def draw_fps(frame, fps):
-    cv2.putText(frame, f"FPS: {fps:.1f}", (10, 25),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 200, 255), 2)
-    return frame
 def draw_text_detections(frame, text_detections):
     for t in text_detections:
         x1, y1, x2, y2 = t.bbox
-        cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 255), 2)  # magenta
+        color = (0, 0, 255) if t.risk == "high" else (255, 0, 255)
+        cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
         label = f'"{t.text}" {t.confidence:.2f}'
         cv2.putText(frame, label, (x1, max(y1 - 6, 12)),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 1)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+    return frame
+
+
+def draw_fps(frame, fps):
+    cv2.putText(frame, f"FPS: {fps:.1f}", (10, 25),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 200, 255), 2)
     return frame

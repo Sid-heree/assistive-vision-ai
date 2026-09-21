@@ -1,12 +1,12 @@
 camera:
-  source: 0          # 0 = default webcam; or a path to a video file
+  source: 0
   width: 640
   height: 480
 
 detection:
-  model: "yolo11n.pt"      # nano = fastest. Use yolov8n.pt if 11 gives trouble
+  model: "yolo11n.pt"
   confidence: 0.4
-  device: "cpu"            # change to "cuda" if torch.cuda.is_available()
+  device: "cpu"
 
 spatial:
   left_boundary: 0.33
@@ -14,16 +14,12 @@ spatial:
   top_boundary: 0.33
   bottom_boundary: 0.66
 
-display:
-  show_window: true
-  show_fps: true
-  show_zones: true
-  summary_every: 15        # print a sentence every N frames, not every frame
 depth:
   model: "depth-anything/Depth-Anything-V2-Small-hf"
   device: "cpu"
-  run_every_n_frames: 3      # depth is expensive; don't run every frame
-  downscale_width: 256       # smaller = faster, coarser
+  run_every_n_frames: 3
+  downscale_width: 256
+
 ocr:
   languages: ["en"]
   confidence: 0.5
@@ -36,3 +32,14 @@ voice:
   rate: 170
   volume: 1.0
   min_repeat_interval: 4.0
+
+scene:
+  max_objects: 3
+  max_texts: 2
+  near_labels: ["very_near", "near"]
+
+display:
+  show_window: true
+  show_fps: true
+  show_zones: true
+  summary_every: 15

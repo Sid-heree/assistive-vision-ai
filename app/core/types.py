@@ -1,12 +1,12 @@
-from dataclasses import dataclass, asdict
+import time
+from dataclasses import dataclass, asdict, field
 from typing import List, Optional, Tuple
 
 
 @dataclass
 class Detection:
     """One detected object. Fields are filled in progressively:
-    Day 1-2 perception, Day 3 depth, Day 6 tracking.
-    """
+    Day 1-2 perception, Day 3 depth, Day 5 risk, Day 6 tracking."""
 
     # --- Day 1: raw detection ---
     class_name: str
@@ -21,122 +21,104 @@ class Detection:
     vertical: Optional[str] = None       # "upper" | "middle" | "lower"
 
     # --- Day 3: depth ---
-    distance: Optional[float] = None     # metres
-    depth_label: Optional[str] = None    # "very_near" | "near" | ...
+    distance: Optional[float] = None     # normalized nearness 0..1 (NOT meters)
+    depth_label: Optional[str] = None    # "very_near" | "near" | "medium" | "far"
 
-    # --- Day 6: tracking ---
+    # --- Day 5: risk ---
+    risk: Optional[str] = None           # "high" | "medium" | "low"
+
+    # --- Day 6: tracking (placeholders) ---
     track_id: Optional[int] = None
 
     # ---------- geometry ----------
-
     @property
     def center(self) -> Tuple[float, float]:
-        """Center point of the bounding box."""
         x1, y1, x2, y2 = self.bbox
         return ((x1 + x2) / 2, (y1 + y2) / 2)
 
     @property
     def norm_center(self) -> Tuple[float, float]:
-        """Center point normalized to 0-1 range."""
         cx, cy = self.center
-        return (
-            cx / self.frame_width,
-            cy / self.frame_height
-        )
+        return (cx / self.frame_width, cy / self.frame_height)
 
     @property
     def ground_point(self) -> Tuple[float, float]:
-        """Bottom-center of the bounding box.
-
-        This approximates where the object meets the floor and is
-        useful for depth sampling and obstacle positioning.
-        """
+        """Bottom-centre of the box — where the object meets the floor."""
         x1, _, x2, y2 = self.bbox
         return ((x1 + x2) / 2, y2)
 
     @property
     def area_ratio(self) -> float:
-        """Fraction of the frame covered by the bounding box.
-
-        This is only a crude proximity estimate and should not
-        replace actual depth estimation.
-        """
         x1, y1, x2, y2 = self.bbox
-
-        return abs(
-            (x2 - x1) * (y2 - y1)
-        ) / (
-            self.frame_width * self.frame_height
-        )
+        return abs((x2 - x1) * (y2 - y1)) / (self.frame_width * self.frame_height)
 
     def to_dict(self) -> dict:
-        """Convert to a JSON-ready dictionary.
-
-        Fields that are still None are removed.
-        """
-        return {
-            k: v
-            for k, v in asdict(self).items()
-            if v is not None
-        }
+        return {k: v for k, v in asdict(self).items() if v is not None}
 
     def __repr__(self) -> str:
-        """Readable representation for debugging."""
         pos = self.position or "?"
-        return f"<{self.class_name} {self.confidence:.2f} {pos}>"
+        risk = f" [{self.risk}]" if self.risk else ""
+        return f"<{self.class_name} {self.confidence:.2f} {pos}{risk}>"
 
 
 @dataclass
 class TextDetection:
-    """One piece of recognized text.
+    """One piece of recognized text."""
 
-    Separate from Detection because OCR confidence and geometry
-    behave differently from object detection.
-    """
-
-    # --- OCR result ---
     text: str
     confidence: float
-    bbox: List[int]              # [x1, y1, x2, y2] in pixels
-
-    # --- Frame information ---
+    bbox: List[int]
     frame_width: int
     frame_height: int
 
-    # --- Spatial information ---
-    position: Optional[str] = None       # "left" | "center" | "right"
-    vertical: Optional[str] = None       # "upper" | "middle" | "lower"
-
-    # ---------- geometry ----------
+    position: Optional[str] = None
+    vertical: Optional[str] = None
+    risk: Optional[str] = None           # "high" | "medium" | "low"
 
     @property
     def center(self) -> Tuple[float, float]:
-        """Center point of the text bounding box."""
         x1, y1, x2, y2 = self.bbox
         return ((x1 + x2) / 2, (y1 + y2) / 2)
 
     @property
     def norm_center(self) -> Tuple[float, float]:
-        """Center point normalized to 0-1 range."""
         cx, cy = self.center
-
-        return (
-            cx / self.frame_width,
-            cy / self.frame_height
-        )
+        return (cx / self.frame_width, cy / self.frame_height)
 
     def to_dict(self) -> dict:
-        """Convert to a JSON-ready dictionary.
+        return {k: v for k, v in asdict(self).items() if v is not None}
 
-        Fields that are still None are removed.
-        """
+    def __repr__(self):
+        return f"<Text '{self.text}' {self.position} [{self.risk}]>"
+
+
+@dataclass
+class Scene:
+    """A unified snapshot of everything perceived in one frame."""
+
+    objects: List[Detection] = field(default_factory=list)
+    texts: List[TextDetection] = field(default_factory=list)
+    timestamp: float = field(default_factory=time.time)
+
+    def to_dict(self) -> dict:
         return {
-            k: v
-            for k, v in asdict(self).items()
-            if v is not None
+            "objects": [o.to_dict() for o in self.objects],
+            "text": [t.to_dict() for t in self.texts],
+            "timestamp": self.timestamp,
         }
 
-    def __repr__(self) -> str:
-        """Readable representation for debugging."""
-        pos = self.position or "?"
-        return f"<Text '{self.text}' {pos}>"
+    @property
+    def is_empty(self) -> bool:
+        return not self.objects and not self.texts
+
+    @property
+    def highest_risk(self) -> Optional[str]:
+        risks = [o.risk for o in self.objects if o.risk] + \
+                [t.risk for t in self.texts if t.risk]
+        if "high" in risks:
+            return "high"
+        if "medium" in risks:
+            return "medium"
+        if risks:
+            return "low"
+        return None

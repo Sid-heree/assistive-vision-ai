@@ -7,7 +7,8 @@ import yaml
 from app.camera.camera import Camera
 from app.detection.detector import Detector
 from app.scene.spatial import SpatialReasoner
-from app.scene.describe import summarize
+from app.scene.priority import PriorityEngine
+from app.scene.analyzer import SceneAnalyzer
 from app.depth.depth_estimator import DepthEstimator
 from app.depth.sampler import annotate_depth
 from app.ocr.ocr_reader import OCRReader
@@ -38,6 +39,7 @@ def main():
     d_cfg = cfg["depth"]
     ocr_cfg = cfg["ocr"]
     v_cfg = cfg["voice"]
+    scene_cfg = cfg["scene"]
 
     detector = Detector(
         model_path=cfg["detection"]["model"],
@@ -58,6 +60,13 @@ def main():
         confidence=ocr_cfg["confidence"],
         min_text_length=ocr_cfg["min_text_length"],
         gpu=ocr_cfg["gpu"],
+    )
+    priority_engine = PriorityEngine(
+        near_labels=scene_cfg["near_labels"],
+    )
+    analyzer = SceneAnalyzer(
+        max_objects=scene_cfg["max_objects"],
+        max_texts=scene_cfg["max_texts"],
     )
     speaker = Speaker(
         rate=v_cfg["rate"], volume=v_cfg["volume"],
@@ -101,6 +110,11 @@ def main():
                     ocr_ms = (time.perf_counter() - t3) * 1000
                     last_texts = spatial.annotate(last_texts)
 
+                # Risk scoring is cheap pure-python -> run every frame so a
+                # high-risk warning is never more than one frame stale.
+                detections, last_texts = priority_engine.annotate(detections, last_texts)
+                scene = analyzer.build_scene(detections, last_texts)
+
                 frame = draw_zones(frame, sp_cfg["left_boundary"], sp_cfg["right_boundary"])
                 frame = draw_detections(frame, detections)
                 frame = draw_text_detections(frame, last_texts)
@@ -111,16 +125,22 @@ def main():
                 if cfg["display"]["show_fps"]:
                     frame = draw_fps(frame, fps)
 
-                if frame_idx % cfg["display"].get("summary_every", 15) == 0:
-                    sentence = summarize(detections, last_texts)
+                is_high_risk = scene.highest_risk == "high"
+                should_report = (
+                    is_high_risk or
+                    frame_idx % cfg["display"].get("summary_every", 15) == 0
+                )
+
+                if should_report:
+                    sentence = analyzer.describe(scene)
                     print(f"[yolo {detect_ms:5.1f}ms | depth {depth_ms:6.1f}ms | "
-                          f"ocr {ocr_ms:6.1f}ms] {sentence}")
+                          f"ocr {ocr_ms:6.1f}ms | risk {scene.highest_risk}] {sentence}")
 
                     if speaker:
-                        speaker.say(sentence)
+                        speaker.say(sentence, force=is_high_risk)
 
                 if cfg["display"]["show_window"]:
-                    cv2.imshow("Assistive Vision AI - Day 4", frame)
+                    cv2.imshow("Assistive Vision AI - Day 5", frame)
                     if cv2.waitKey(1) & 0xFF == ord("q"):
                         break
 
