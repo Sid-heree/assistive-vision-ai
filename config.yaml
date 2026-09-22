@@ -38,6 +38,13 @@ scene:
   max_texts: 2
   near_labels: ["very_near", "near"]
 
+tracking:
+  tracker: "bytetrack.yaml"   # bundled with ultralytics; "botsort.yaml" also available
+  history_max_len: 10          # frames of distance history kept per track
+  stale_after: 2.0              # seconds of no detection before a track is forgotten
+  approach_threshold: 0.03      # min nearness delta to call it approaching/receding
+  min_samples: 4                # frames needed before motion is judged at all
+
 display:
   show_window: true
   show_fps: true

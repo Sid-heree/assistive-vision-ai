@@ -7,8 +7,14 @@ ZONE_COLORS = {
 }
 
 RISK_COLORS = {
-    "high": (0, 0, 255),       # red, BGR
-    "medium": (0, 165, 255),   # orange
+    "high": (0, 0, 255),
+    "medium": (0, 165, 255),
+}
+
+MOTION_ARROWS = {
+    "approaching": "^",
+    "receding": "v",
+    "stationary": "=",
 }
 
 
@@ -33,9 +39,16 @@ def draw_detections(frame, detections):
         color = RISK_COLORS.get(det.risk) or ZONE_COLORS.get(det.position, (0, 255, 0))
         thickness = 3 if det.risk == "high" else 2
 
+        tid_str = f"#{det.track_id}" if det.track_id is not None else ""
         depth_str = f" | {det.depth_label}" if det.depth_label else ""
         risk_str = f" | {det.risk.upper()}" if det.risk else ""
-        label = f"{det.class_name} {det.confidence:.2f} | {det.position}{depth_str}{risk_str}"
+        motion_str = ""
+        if det.motion:
+            arrow = MOTION_ARROWS.get(det.motion, "")
+            motion_str = f" | {arrow}{det.motion}"
+
+        label = (f"{det.class_name}{tid_str} {det.confidence:.2f} | "
+                 f"{det.position}{depth_str}{risk_str}{motion_str}")
 
         cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness)
         gx, gy = det.ground_point
@@ -62,4 +75,11 @@ def draw_text_detections(frame, text_detections):
 def draw_fps(frame, fps):
     cv2.putText(frame, f"FPS: {fps:.1f}", (10, 25),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 200, 255), 2)
+    return frame
+
+
+def draw_track_count(frame, count):
+    h = frame.shape[0]
+    cv2.putText(frame, f"Active tracks: {count}", (10, h - 10),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
     return frame

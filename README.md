@@ -50,3 +50,12 @@ Camera → Frame → YOLO → Detections → Visualisation
   detection in Day 5
 - No urgency/interrupt behavior yet — a new "warning" and a routine
   "chair ahead" are spoken with equal weight (Day 5/6 fix this)
+- [x] Day 4 — OCR + text-to-speech
+
+## Known issues (cont.)
+- OCR runs every 10th frame; brief signage in view for < ~0.3s may be missed
+- TTS de-duplication means the SAME sentence won't repeat within 4s even
+  if genuinely still true — will be replaced by proper priority/change
+  detection in Day 5
+- No urgency/interrupt behavior yet — a new "warning" and a routine
+  "chair ahead" are spoken with equal weight (Day 5/6 fix this)

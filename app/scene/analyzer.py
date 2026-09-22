@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import List, Optional
+from typing import List
 from app.core.types import Detection, TextDetection, Scene
 
 SIDE_PHRASE = {"left": "on your left", "right": "on your right", "center": "ahead"}
@@ -9,8 +9,8 @@ DEPTH_ORDER = {"very_near": 0, "near": 1, "medium": 2, "far": 3}
 
 class SceneAnalyzer:
     """
-    Turns a Scene (already risk-scored by PriorityEngine) into a single
-    spoken sentence: warnings first, routine narration after, signage last.
+    Turns a Scene (already risk-scored) into a single spoken sentence:
+    warnings first, routine narration after, signage last.
     """
 
     def __init__(self, max_objects: int = 3, max_texts: int = 2):
@@ -30,8 +30,15 @@ class SceneAnalyzer:
     @staticmethod
     def _high_risk_phrase(det: Detection) -> str:
         side = SIDE_PHRASE.get(det.position, "nearby")
+
+        # Most urgent framing first: already very close and dead ahead.
         if det.depth_label == "very_near" and det.position == "center":
             return f"Warning, {det.class_name} very close ahead."
+
+        # Next: it's closing distance on you, even if not yet centered.
+        if det.motion == "approaching":
+            return f"Warning, {det.class_name} approaching {side}."
+
         depth_word = (det.depth_label or "near").replace("_", " ")
         return f"Caution, {det.class_name} {side}, {depth_word}."
 
@@ -44,14 +51,11 @@ class SceneAnalyzer:
 
         ranked_objects = sorted(objects, key=self._object_sort_key)
 
-        # Warnings: every high-risk object gets its own explicit sentence.
         warnings = [
             self._high_risk_phrase(det)
             for det in ranked_objects if det.risk == "high"
         ]
 
-        # Routine narration: group non-high-risk objects by (class, side)
-        # so "chair, chair, chair" becomes "3 chairs on your left".
         groups = defaultdict(int)
         order = []
         for det in ranked_objects:
@@ -69,8 +73,6 @@ class SceneAnalyzer:
             article = "a " if count == 1 else f"{count} "
             routine_parts.append(f"{article}{noun} {SIDE_PHRASE[side]}")
 
-        # Text: safety-keyword text gets a "Warning, sign reads" prefix;
-        # everything else stays a neutral "Text detected".
         ranked_texts = sorted(texts, key=self._text_sort_key)
         text_parts = []
         seen = set()

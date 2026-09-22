@@ -6,7 +6,7 @@ from typing import List, Optional, Tuple
 @dataclass
 class Detection:
     """One detected object. Fields are filled in progressively:
-    Day 1-2 perception, Day 3 depth, Day 5 risk, Day 6 tracking."""
+    Day 1-2 perception, Day 3 depth, Day 5 risk, Day 6 tracking/motion."""
 
     # --- Day 1: raw detection ---
     class_name: str
@@ -27,8 +27,9 @@ class Detection:
     # --- Day 5: risk ---
     risk: Optional[str] = None           # "high" | "medium" | "low"
 
-    # --- Day 6: tracking (placeholders) ---
+    # --- Day 6: tracking + motion ---
     track_id: Optional[int] = None
+    motion: Optional[str] = None         # "approaching" | "receding" | "stationary"
 
     # ---------- geometry ----------
     @property
@@ -58,7 +59,9 @@ class Detection:
     def __repr__(self) -> str:
         pos = self.position or "?"
         risk = f" [{self.risk}]" if self.risk else ""
-        return f"<{self.class_name} {self.confidence:.2f} {pos}{risk}>"
+        tid = f"#{self.track_id}" if self.track_id is not None else ""
+        motion = f" ({self.motion})" if self.motion else ""
+        return f"<{self.class_name}{tid} {self.confidence:.2f} {pos}{risk}{motion}>"
 
 
 @dataclass

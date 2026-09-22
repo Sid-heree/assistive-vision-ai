@@ -13,8 +13,9 @@ from app.depth.depth_estimator import DepthEstimator
 from app.depth.sampler import annotate_depth
 from app.ocr.ocr_reader import OCRReader
 from app.voice.speaker import Speaker
+from app.tracking.history import TrackHistory
 from app.utils.visualize import (
-    draw_detections, draw_fps, draw_zones, draw_text_detections
+    draw_detections, draw_fps, draw_zones, draw_text_detections, draw_track_count
 )
 
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.yaml"
@@ -40,11 +41,13 @@ def main():
     ocr_cfg = cfg["ocr"]
     v_cfg = cfg["voice"]
     scene_cfg = cfg["scene"]
+    t_cfg = cfg["tracking"]
 
     detector = Detector(
         model_path=cfg["detection"]["model"],
         confidence=cfg["detection"]["confidence"],
         device=cfg["detection"]["device"],
+        tracker=t_cfg["tracker"],
     )
     spatial = SpatialReasoner(
         left_boundary=sp_cfg["left_boundary"],
@@ -68,6 +71,12 @@ def main():
         max_objects=scene_cfg["max_objects"],
         max_texts=scene_cfg["max_texts"],
     )
+    history = TrackHistory(
+        max_len=t_cfg["history_max_len"],
+        stale_after=t_cfg["stale_after"],
+        approach_threshold=t_cfg["approach_threshold"],
+        min_samples=t_cfg["min_samples"],
+    )
     speaker = Speaker(
         rate=v_cfg["rate"], volume=v_cfg["volume"],
         min_repeat_interval=v_cfg["min_repeat_interval"],
@@ -89,7 +98,7 @@ def main():
                 frame_idx += 1
 
                 t0 = time.perf_counter()
-                detections = detector.detect(frame)
+                detections = detector.track(frame)     # <-- tracked, not plain detect()
                 detect_ms = (time.perf_counter() - t0) * 1000
 
                 detections = spatial.annotate(detections)
@@ -110,14 +119,18 @@ def main():
                     ocr_ms = (time.perf_counter() - t3) * 1000
                     last_texts = spatial.annotate(last_texts)
 
-                # Risk scoring is cheap pure-python -> run every frame so a
-                # high-risk warning is never more than one frame stale.
+                # Record this frame's raw values, THEN overwrite with
+                # smoothed position + derived motion for anything tracked.
+                history.update(detections)
+                detections = history.annotate(detections)
+
                 detections, last_texts = priority_engine.annotate(detections, last_texts)
                 scene = analyzer.build_scene(detections, last_texts)
 
                 frame = draw_zones(frame, sp_cfg["left_boundary"], sp_cfg["right_boundary"])
                 frame = draw_detections(frame, detections)
                 frame = draw_text_detections(frame, last_texts)
+                frame = draw_track_count(frame, history.active_track_count())
 
                 now = time.time()
                 fps = 1.0 / max(now - prev_time, 1e-6)
@@ -134,13 +147,14 @@ def main():
                 if should_report:
                     sentence = analyzer.describe(scene)
                     print(f"[yolo {detect_ms:5.1f}ms | depth {depth_ms:6.1f}ms | "
-                          f"ocr {ocr_ms:6.1f}ms | risk {scene.highest_risk}] {sentence}")
+                          f"ocr {ocr_ms:6.1f}ms | tracks {history.active_track_count()} | "
+                          f"risk {scene.highest_risk}] {sentence}")
 
                     if speaker:
                         speaker.say(sentence, force=is_high_risk)
 
                 if cfg["display"]["show_window"]:
-                    cv2.imshow("Assistive Vision AI - Day 5", frame)
+                    cv2.imshow("Assistive Vision AI - Day 6", frame)
                     if cv2.waitKey(1) & 0xFF == ord("q"):
                         break
 

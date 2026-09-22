@@ -7,10 +7,8 @@ class PriorityEngine:
     """
     Assigns a risk level ("high" | "medium" | "low") to every object
     and every piece of text in a frame, using simple, explainable rules.
-
-    Rules are deliberately readable if/then statements — not a learned
-    model — because for a safety-adjacent feature you want to be able
-    to say exactly WHY something was flagged, and to tune it by hand.
+    Day 6 adds motion: something APPROACHING is worth flagging even
+    before it's directly centered or "very near" yet.
     """
 
     def __init__(self, near_labels=("very_near", "near"),
@@ -24,24 +22,28 @@ class PriorityEngine:
         is_very_near = det.depth_label == "very_near"
         is_center = det.position == "center"
         is_low_or_mid = det.vertical in ("lower", "middle")
+        is_approaching = det.motion == "approaching"
 
-        # Rule 1: anything very close AND directly ahead is high priority,
-        # regardless of what it is.
+        # Rule 1: very close AND directly ahead is high, regardless of class.
         if is_very_near and is_center:
             return "high"
 
-        # Rule 2: vehicles are dangerous even if not perfectly centered —
-        # a car near your left shoulder still matters.
+        # Rule 2: vehicles that are near are dangerous even off-center.
         if det.class_name in self.danger_classes and is_near:
             return "high"
 
-        # Rule 3: anything near, ahead, and at floor/torso height is a
-        # walking-into-it hazard even if it's not "very" near yet.
+        # Rule 3: near, ahead, floor/torso height -> walking-into-it hazard.
         if is_near and is_center and is_low_or_mid:
             return "high"
 
-        # Rule 4: near or medium-distance objects are worth mentioning
-        # but don't need to interrupt anything.
+        # Rule 4 (Day 6): something actively closing distance is worth a
+        # warning even if it hasn't reached "very near / center" yet —
+        # this is what lets the system say "approaching" BEFORE collision
+        # range, not just at the moment it's already dangerously close.
+        if is_approaching and is_near:
+            return "high"
+
+        # Rule 5: near or medium-distance objects worth mentioning, no rush.
         if det.depth_label in ("near", "medium"):
             return "medium"
 
@@ -55,7 +57,6 @@ class PriorityEngine:
 
     def annotate(self, objects: List[Detection],
                  texts: List[TextDetection]) -> Tuple[List[Detection], List[TextDetection]]:
-        """Fills in .risk on every item, in place, and returns both lists."""
         for det in objects:
             det.risk = self.score_detection(det)
         for text in texts:
