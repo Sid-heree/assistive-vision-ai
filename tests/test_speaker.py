@@ -48,3 +48,23 @@ def test_force_bypasses_dedup():
     result = speaker.say("hello", force=True)
     assert result is True
     speaker.stop()
+def test_forced_calls_are_rate_limited_not_unlimited():
+    """This is the Day 7 bug: force=True must NOT mean 'speak every
+    single call' -- it must still respect a (short) cooldown."""
+    speaker = make_fake_speaker(urgent_repeat_interval=1.0)
+    results = [speaker.say("warning", force=True) for _ in range(10)]
+    # Only the FIRST of 10 rapid-fire forced calls should actually queue
+    assert results.count(True) == 1
+    speaker.stop()
+
+
+def test_forced_call_clears_stale_queue():
+    speaker = make_fake_speaker(min_repeat_interval=100.0, urgent_repeat_interval=0.01)
+    speaker.say("routine message one")
+    speaker.say("routine message two", force=False)
+    import time as _time
+    _time.sleep(0.02)
+    speaker.say("urgent warning", force=True)
+    # queue should now contain at most the urgent message, not a backlog
+    assert speaker._queue.qsize() <= 1
+    speaker.stop()

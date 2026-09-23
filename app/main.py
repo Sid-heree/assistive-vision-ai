@@ -78,8 +78,11 @@ def main():
         min_samples=t_cfg["min_samples"],
     )
     speaker = Speaker(
-        rate=v_cfg["rate"], volume=v_cfg["volume"],
+        rate=v_cfg["rate"],
+        volume=v_cfg["volume"],
         min_repeat_interval=v_cfg["min_repeat_interval"],
+        urgent_repeat_interval=v_cfg.get("urgent_repeat_interval", 2.5),
+        max_queue_size=v_cfg.get("max_queue_size", 3),
     ) if v_cfg["enabled"] else None
 
     prev_time = time.time()
@@ -98,7 +101,7 @@ def main():
                 frame_idx += 1
 
                 t0 = time.perf_counter()
-                detections = detector.track(frame)     # <-- tracked, not plain detect()
+                detections = detector.track(frame)
                 detect_ms = (time.perf_counter() - t0) * 1000
 
                 detections = spatial.annotate(detections)
@@ -119,8 +122,6 @@ def main():
                     ocr_ms = (time.perf_counter() - t3) * 1000
                     last_texts = spatial.annotate(last_texts)
 
-                # Record this frame's raw values, THEN overwrite with
-                # smoothed position + derived motion for anything tracked.
                 history.update(detections)
                 detections = history.annotate(detections)
 
@@ -154,7 +155,7 @@ def main():
                         speaker.say(sentence, force=is_high_risk)
 
                 if cfg["display"]["show_window"]:
-                    cv2.imshow("Assistive Vision AI - Day 6", frame)
+                    cv2.imshow("Assistive Vision AI - Day 7", frame)
                     if cv2.waitKey(1) & 0xFF == ord("q"):
                         break
 
