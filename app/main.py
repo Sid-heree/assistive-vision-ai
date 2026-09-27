@@ -5,7 +5,7 @@ import cv2
 import yaml
 
 from app.camera.camera import Camera
-from app.detection.detector import Detector
+from app.detection.detector import Detector, CUSTOM_TRACK_ID_OFFSET
 from app.scene.spatial import SpatialReasoner
 from app.scene.priority import PriorityEngine
 from app.scene.analyzer import SceneAnalyzer
@@ -42,13 +42,26 @@ def main():
     v_cfg = cfg["voice"]
     scene_cfg = cfg["scene"]
     t_cfg = cfg["tracking"]
+    cd_cfg = cfg.get("custom_detection", {"enabled": False})
 
     detector = Detector(
         model_path=cfg["detection"]["model"],
         confidence=cfg["detection"]["confidence"],
         device=cfg["detection"]["device"],
         tracker=t_cfg["tracker"],
+        id_offset=0,
     )
+
+    custom_detector = None
+    if cd_cfg.get("enabled", False):
+        custom_detector = Detector(
+            model_path=cd_cfg["model"],
+            confidence=cd_cfg["confidence"],
+            device=cd_cfg["device"],
+            tracker=t_cfg["tracker"],
+            id_offset=CUSTOM_TRACK_ID_OFFSET,
+        )
+
     spatial = SpatialReasoner(
         left_boundary=sp_cfg["left_boundary"],
         right_boundary=sp_cfg["right_boundary"],
@@ -102,6 +115,14 @@ def main():
 
                 t0 = time.perf_counter()
                 detections = detector.track(frame)
+
+                # Merge in custom-hazard detections (stairs, etc.) from the
+                # second model, on the SAME frame. Downstream code treats
+                # them identically -- it has no notion of which model
+                # produced a given Detection.
+                if custom_detector is not None:
+                    detections += custom_detector.track(frame)
+
                 detect_ms = (time.perf_counter() - t0) * 1000
 
                 detections = spatial.annotate(detections)
@@ -155,7 +176,7 @@ def main():
                         speaker.say(sentence, force=is_high_risk)
 
                 if cfg["display"]["show_window"]:
-                    cv2.imshow("Assistive Vision AI - Day 7", frame)
+                    cv2.imshow("Assistive Vision AI - Custom Model", frame)
                     if cv2.waitKey(1) & 0xFF == ord("q"):
                         break
 

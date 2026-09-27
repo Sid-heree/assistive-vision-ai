@@ -8,55 +8,9 @@ detection:
   confidence: 0.4
   device: "cpu"
 
-spatial:
-  left_boundary: 0.33
-  right_boundary: 0.66
-  top_boundary: 0.33
-  bottom_boundary: 0.66
-
-depth:
-  model: "depth-anything/Depth-Anything-V2-Small-hf"
-  device: "cpu"
-  run_every_n_frames: 3
-  downscale_width: 256
-
-ocr:
-  languages: ["en"]
-  confidence: 0.5
-  min_text_length: 2
-  run_every_n_frames: 10
-  gpu: false
-
-voice:
+custom_detection:
   enabled: true
-  rate: 170
-  volume: 1.0
-  min_repeat_interval: 4.0
-
-scene:
-  max_objects: 3
-  max_texts: 2
-  near_labels: ["very_near", "near"]
-
-tracking:
-  tracker: "bytetrack.yaml"   # bundled with ultralytics; "botsort.yaml" also available
-  history_max_len: 10          # frames of distance history kept per track
-  stale_after: 2.0              # seconds of no detection before a track is forgotten
-  approach_threshold: 0.03      # min nearness delta to call it approaching/receding
-  min_samples: 4                # frames needed before motion is judged at all
-
-display:
-  show_window: true
-  show_fps: true
-  show_zones: true
-  summary_every: 15
-  camera:
-  source: 0
-  width: 640
-  height: 480
-
-detection:
-  model: "yolo11n.pt"
+  model: "models/custom/stairs_v1.pt"
   confidence: 0.4
   device: "cpu"
 

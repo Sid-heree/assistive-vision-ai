@@ -12,7 +12,7 @@ import streamlit as st
 import yaml
 
 from app.camera.camera import Camera
-from app.detection.detector import Detector
+from app.detection.detector import Detector, CUSTOM_TRACK_ID_OFFSET
 from app.scene.spatial import SpatialReasoner
 from app.scene.priority import PriorityEngine
 from app.scene.analyzer import SceneAnalyzer
@@ -44,13 +44,26 @@ def load_pipeline():
     bottom on every rerun.
     """
     cfg = load_config()
+    cd_cfg = cfg.get("custom_detection", {"enabled": False})
 
     detector = Detector(
         model_path=cfg["detection"]["model"],
         confidence=cfg["detection"]["confidence"],
         device=cfg["detection"]["device"],
         tracker=cfg["tracking"]["tracker"],
+        id_offset=0,
     )
+
+    custom_detector = None
+    if cd_cfg.get("enabled", False):
+        custom_detector = Detector(
+            model_path=cd_cfg["model"],
+            confidence=cd_cfg["confidence"],
+            device=cd_cfg["device"],
+            tracker=cfg["tracking"]["tracker"],
+            id_offset=CUSTOM_TRACK_ID_OFFSET,
+        )
+
     spatial = SpatialReasoner(
         left_boundary=cfg["spatial"]["left_boundary"],
         right_boundary=cfg["spatial"]["right_boundary"],
@@ -86,10 +99,10 @@ def load_pipeline():
     ) if cfg["voice"]["enabled"] else None
 
     return {
-        "cfg": cfg, "detector": detector, "spatial": spatial,
-        "depth_estimator": depth_estimator, "ocr_reader": ocr_reader,
-        "priority_engine": priority_engine, "analyzer": analyzer,
-        "history": history, "speaker": speaker,
+        "cfg": cfg, "detector": detector, "custom_detector": custom_detector,
+        "spatial": spatial, "depth_estimator": depth_estimator,
+        "ocr_reader": ocr_reader, "priority_engine": priority_engine,
+        "analyzer": analyzer, "history": history, "speaker": speaker,
     }
 
 
@@ -140,6 +153,9 @@ def main():
     pipeline = load_pipeline()
     cfg = pipeline["cfg"]
 
+    if pipeline["custom_detector"] is not None:
+        st.caption("🪜 Custom stairs detector: **active**")
+
     run = st.checkbox("▶️ Start camera")
 
     col_video, col_info = st.columns([2, 1])
@@ -162,12 +178,15 @@ def main():
                     height=cfg["camera"]["height"]) as cam:
 
             for frame in cam.frames():
-                # Streamlit re-checks widget state between iterations; if the
-                # user unchecks "Start camera", the script is interrupted and
-                # re-run from the top automatically — no manual break needed.
                 frame_idx += 1
 
                 detections = pipeline["detector"].track(frame)
+
+                # Merge in custom-hazard detections (e.g. stairs) from the
+                # second model on the SAME frame, exactly as app/main.py does.
+                if pipeline["custom_detector"] is not None:
+                    detections += pipeline["custom_detector"].track(frame)
+
                 detections = pipeline["spatial"].annotate(detections)
 
                 if frame_idx % cfg["depth"]["run_every_n_frames"] == 0 or last_depth_map is None:

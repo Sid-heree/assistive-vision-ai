@@ -7,11 +7,13 @@ DEPTH_BUCKETS = [
     (1.01, "far"),   # anything above previous thresholds
 ]
 
-# COCO classes that represent a physical hazard if they're close and
-# moving toward the user (vehicles, especially). Adjust freely — this
-# is a judgment call, not a fixed fact.
+# Classes that represent a physical hazard if they're close and
+# moving toward the user (vehicles), or a fall hazard regardless of
+# motion (stairs — a custom-trained class, not part of COCO).
+# Adjust freely — this is a judgment call, not a fixed fact.
 DANGER_CLASSES = {
     "car", "bus", "truck", "train", "motorcycle", "bicycle",
+    "stairs",   # custom class — falling hazard, high risk even without motion
 }
 
 # Words that, if found in OCR text, make that text safety-relevant

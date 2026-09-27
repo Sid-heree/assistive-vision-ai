@@ -1,14 +1,20 @@
 from ultralytics import YOLO
 from app.core.types import Detection
 
+# Offset added to every track_id coming from a SECONDARY detector, so its
+# IDs never collide with the primary COCO detector's IDs (both trackers
+# independently count from 1 otherwise).
+CUSTOM_TRACK_ID_OFFSET = 100_000
+
 
 class Detector:
     def __init__(self, model_path="yolo11n.pt", confidence=0.4, device="cpu",
-                 tracker="bytetrack.yaml"):
+                 tracker="bytetrack.yaml", id_offset=0):
         self.model = YOLO(model_path)
         self.confidence = confidence
         self.device = device
         self.tracker = tracker
+        self.id_offset = id_offset
         self.class_names = self.model.names
         print(f"[Detector] Loaded {model_path} on {device} "
               f"({len(self.class_names)} classes)")
@@ -53,7 +59,7 @@ class Detector:
 
             track_id = None
             if with_tracking and box.id is not None:
-                track_id = int(box.id[0])
+                track_id = int(box.id[0]) + self.id_offset
 
             detections.append(Detection(
                 class_name=self.class_names[class_id],
